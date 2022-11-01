@@ -16,7 +16,7 @@ HEADERMOD_VER=0.34
 	mkdir -p /usr/local/src/nginx/modules
 
 	# Dependencies
-	#dnf install -y build-essential ca-certificates wget curl libpcre3 libpcre3-dev autoconf unzip automake libtool tar git libssl-dev zlib1g-dev uuid-dev lsb-release libxml2-dev libxslt1-dev cmake
+	#dnf install -y build-essential ca-certificates wget curl libpcre3 libpcre3-dev autoconf unzip automake libtool tar git libssl-dev zlib1g-dev uuid-dev libxml2-dev libxslt1-dev cmake liburing liburing-devel
 
 
 	#Brotli
@@ -115,6 +115,10 @@ HEADERMOD_VER=0.34
 			echo "$NGINX_MODULES"
 			echo --with-http_v3_module
 		)
+
+		#IO uring patch
+		wget https://raw.githubusercontent.com/hakasenyang/openssl-patch/master/nginx_io_uring.patch -O io_uring.patch
+		patch -p1 <io_uring.patch
 
 	# Cloudflare's Cloudflare's full HPACK encoding patch
 			wget https://raw.githubusercontent.com/angristan/nginx-autoinstall/master/patches/nginx_hpack_push_with_http3.patch -O nginx_http2_hpack.patch
