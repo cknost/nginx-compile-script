@@ -7,43 +7,64 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Define versions
-NGINX_VER=1.23.1
-HEADERMOD_VER=0.34
-
+NGINX_VER=1.25.4
+HEADERMOD_VER=0.37
+BUILDROOT="/usr/local/src/nginx/"
+set -e
 	# Cleanup
 	# The directory should be deleted at the end of the script, but in case it fails
 	rm -r /usr/local/src/nginx/ >>/dev/null 2>&1
 	mkdir -p /usr/local/src/nginx/modules
 
 	# Dependencies
-	#dnf install -y build-essential ca-certificates wget curl libpcre3 libpcre3-dev autoconf unzip automake libtool tar git libssl-dev zlib1g-dev uuid-dev libxml2-dev libxslt1-dev cmake liburing liburing-devel
+	dnf install -y ca-certificates wget curl autoconf unzip automake libtool tar git cmake liburing patch gcc gcc-c++
+	dnf -y install gcc-toolset-11-gcc gcc-toolset-11-gcc-c++
 
 
-	#Brotli
+	# Brotli
 		cd /usr/local/src/nginx/modules || exit 1
 		git clone https://github.com/google/ngx_brotli
 		cd ngx_brotli || exit 1
 		git submodule update --init
+		cd deps/brotli
+		mkdir out && cd out
+		source /opt/rh/gcc-toolset-11/enable
+		cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
+		cmake --build . --config Release --target brotlienc
 
 	# More Headers
 		cd /usr/local/src/nginx/modules || exit 1
 		wget https://github.com/openresty/headers-more-nginx-module/archive/v${HEADERMOD_VER}.tar.gz
 		tar xaf v${HEADERMOD_VER}.tar.gz
 
+	# testcookie
+		cd /usr/local/src/nginx/modules || exit 1
+		git clone https://github.com/dvershinin/testcookie-nginx-module.git
 
 	# Download and extract of Nginx source code
 	cd /usr/local/src/nginx/ || exit 1
 	wget -qO- http://nginx.org/download/nginx-${NGINX_VER}.tar.gz | tar zxf -
 	cd nginx-${NGINX_VER} || exit 1
 
-	# As the default nginx.conf does not work, we download a clean and working conf from my GitHub.
-	# We do it only if it does not already exist, so that it is not overriten if Nginx is being updated
-	if [[ ! -e /etc/nginx/nginx.conf ]]; then
-		mkdir -p /etc/nginx
-		cd /etc/nginx || exit 1
-		wget https://raw.githubusercontent.com/Angristan/nginx-autoinstall/master/conf/nginx.conf
-	fi
 	cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
+
+	# build boringssl
+	cd $BUILDROOT/modules
+	git clone https://boringssl.googlesource.com/boringssl
+	cd boringssl
+	git checkout --force --quiet e648990
+	grep -qxF 'SET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' crypto/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' >> crypto/CMakeLists.txt
+	grep -qxF 'SET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' ssl/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' >> ssl/CMakeLists.txt
+	mkdir build
+	cd $BUILDROOT/modules/boringssl/build
+	cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+	make -j8
+	cd $BUILDROOT/modules/boringssl
+	mkdir -p .openssl/lib
+	cd .openssl
+	ln -s ../include include
+	cp "$BUILDROOT/modules/boringssl/build/crypto/libcrypto.a" lib/
+	cp "$BUILDROOT/modules/boringssl/build/ssl/libssl.a" lib/
 
 	NGINX_OPTIONS="
 		--prefix=/etc/nginx \
@@ -58,8 +79,7 @@ HEADERMOD_VER=0.34
 		--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
 		--user=nginx \
 		--group=nginx \
-		--with-cc-opt=-Wno-deprecated-declarations \
-		--with-cc-opt=-Wno-ignored-qualifiers"
+		--with-openssl=$BUILDROOT/modules/boringssl"
 
 	NGINX_MODULES="--with-threads \
 		--with-file-aio \
@@ -70,66 +90,39 @@ HEADERMOD_VER=0.34
 		--with-http_slice_module \
 		--with-http_stub_status_module \
 		--with-http_realip_module \
-		--with-http_sub_module"
+		--with-http_sub_module \
+		--add-module=/usr/local/src/nginx/modules/ngx_brotli \
+		--add-module=/usr/local/src/nginx/modules/headers-more-nginx-module-${HEADERMOD_VER} \
+		--add-module=/usr/local/src/nginx/modules/testcookie-nginx-module"
 
 
-		NGINX_MODULES=$(
-			echo "$NGINX_MODULES"
-			echo "--add-module=/usr/local/src/nginx/modules/ngx_brotli"
-		)
+	#### PATCHES #####
 
-		NGINX_MODULES=$(
-			echo "$NGINX_MODULES"
-			echo "--add-module=/usr/local/src/nginx/modules/headers-more-nginx-module-${HEADERMOD_VER}"
-		)
+	cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
 
 	# Cloudflare's TLS Dynamic Record Resizing patch
-		wget https://raw.githubusercontent.com/nginx-modules/ngx_http_tls_dyn_size/master/nginx__dynamic_tls_records_1.17.7%2B.patch -O tcp-tls.patch
+		wget https://raw.githubusercontent.com/nginx-modules/ngx_http_tls_dyn_size/master/nginx__dynamic_tls_records_1.25.1%2B.patch -O tcp-tls.patch
 		patch -p1 <tcp-tls.patch
 
-	# HTTP3
-		cd /usr/local/src/nginx/modules || exit 1
-		git clone --depth 1 --recursive https://github.com/cloudflare/quiche
-		# Dependencies for BoringSSL and Quiche
-		dnf install -y golang
-		# Rust is not packaged so that's the only way...
-		curl -sSf https://sh.rustup.rs | sh -s -- -y
-		source "$HOME/.cargo/env"
+	# other
+		# Dependencies for BoringSSL
+		dnf install -y golang rust
+		#source "$HOME/.cargo/env"
 
 		cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
 		# Patch BoringSSL OCSP stapling
 		wget https://raw.githubusercontent.com/kn007/patch/35f2b0decbc510f2c8adab9261e3d46ba1398e33/Enable_BoringSSL_OCSP.patch -O Enable_BoringSSL_OCSP.patch
 		patch -p01<Enable_BoringSSL_OCSP.patch
-		# Apply actual patch
-		patch -p01 </usr/local/src/nginx/modules/quiche/nginx/nginx-1.16.patch
 
-		# Apply patch for nginx > 1.19.7 (source: https://github.com/cloudflare/quiche/issues/936#issuecomment-857618081)
-		wget https://raw.githubusercontent.com/angristan/nginx-autoinstall/master/patches/nginx-http3-1.19.7.patch -O nginx-http3.patch
-		patch -p01 <nginx-http3.patch
-
-		NGINX_OPTIONS=$(
-			echo "$NGINX_OPTIONS"
-			echo --with-openssl=/usr/local/src/nginx/modules/quiche/quiche/deps/boringssl --with-quiche=/usr/local/src/nginx/modules/quiche
-		)
-		NGINX_MODULES=$(
-			echo "$NGINX_MODULES"
-			echo --with-http_v3_module
-		)
 
 		#IO uring patch
-		wget https://raw.githubusercontent.com/hakasenyang/openssl-patch/master/nginx_io_uring.patch -O io_uring.patch
-		patch -p1 <io_uring.patch
+		#wget https://raw.githubusercontent.com/hakasenyang/openssl-patch/master/nginx_io_uring.patch -O io_uring.patch
+		#patch -p1 <io_uring.patch
 
-	# Cloudflare's Cloudflare's full HPACK encoding patch
-			wget https://raw.githubusercontent.com/angristan/nginx-autoinstall/master/patches/nginx_hpack_push_with_http3.patch -O nginx_http2_hpack.patch
-		patch -p1 <nginx_http2_hpack.patch
 
-		NGINX_OPTIONS=$(
-			echo "$NGINX_OPTIONS"
-			echo --with-http_v2_hpack_enc
-		)
 
-	./configure $NGINX_OPTIONS $NGINX_MODULES
+	./configure $NGINX_OPTIONS $NGINX_MODULES --with-cc-opt="-I/usr/local/src/nginx/modules/boringssl/include" --with-ld-opt="-L/usr/local/src/nginx/modules/boringssl/build/ssl -L/usr/local/src/nginx/modules/boringssl/build/crypto"
+	touch "$BUILDROOT/modules/boringssl/.openssl/include/openssl/ssl.h"
 	make -j "$(nproc)"
 	make install
 
