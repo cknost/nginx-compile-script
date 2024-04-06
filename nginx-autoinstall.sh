@@ -18,8 +18,13 @@ set -e
 
 	# Dependencies
 	dnf install -y ca-certificates wget curl autoconf unzip automake libtool tar git cmake liburing patch gcc gcc-c++
-	dnf -y install gcc-toolset-11-gcc gcc-toolset-11-gcc-c++
-
+	if [ $(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release|grep -oP "[0-9]+"|head -1) == "9" ]; then
+		dnf -y install gcc-toolset-12-gcc gcc-toolset-12-gcc-c++
+		source /opt/rh/gcc-toolset-12/enable
+	else
+		dnf -y install gcc-toolset-11-gcc gcc-toolset-11-gcc-c++
+		source /opt/rh/gcc-toolset-11/enable
+	fi
 
 	# Brotli
 		cd /usr/local/src/nginx/modules || exit 1
@@ -28,7 +33,6 @@ set -e
 		git submodule update --init
 		cd deps/brotli
 		mkdir out && cd out
-		source /opt/rh/gcc-toolset-11/enable
 		cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..
 		cmake --build . --config Release --target brotlienc
 
