@@ -103,10 +103,10 @@ set -e
 		--with-http_stub_status_module \
 		--with-http_realip_module \
 		--with-http_sub_module \
+                --add-module=/usr/local/src/nginx/modules/zstd-nginx-module \
 		--add-module=/usr/local/src/nginx/modules/ngx_brotli \
 		--add-module=/usr/local/src/nginx/modules/headers-more-nginx-module-${HEADERMOD_VER} \
-		--add-module=/usr/local/src/nginx/modules/testcookie-nginx-module \
-		--add-module=/usr/local/src/nginx/modules/zstd-nginx-module"
+		--add-module=/usr/local/src/nginx/modules/testcookie-nginx-module"
 
 
 	#### PATCHES #####
