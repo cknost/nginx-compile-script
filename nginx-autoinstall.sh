@@ -7,7 +7,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Define versions
-NGINX_VER=1.25.4
+NGINX_VER=1.25.5
 HEADERMOD_VER=0.37
 BUILDROOT="/usr/local/src/nginx/"
 set -e
@@ -17,7 +17,7 @@ set -e
 	mkdir -p /usr/local/src/nginx/modules
 
 	# Dependencies
-	dnf install -y ca-certificates wget curl autoconf unzip automake libtool tar git cmake liburing patch gcc gcc-c++
+	dnf install -y ca-certificates wget curl autoconf unzip automake libtool tar git cmake liburing patch gcc gcc-c++ zstd
 	if [ $(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release|grep -oP "[0-9]+"|head -1) == "9" ]; then
 		dnf -y install gcc-toolset-12-gcc gcc-toolset-12-gcc-c++
 		source /opt/rh/gcc-toolset-12/enable
@@ -44,6 +44,14 @@ set -e
 	# testcookie
 		cd /usr/local/src/nginx/modules || exit 1
 		git clone https://github.com/dvershinin/testcookie-nginx-module.git
+	# zstd
+		git clone https://github.com/facebook/zstd.git
+		cd /usr/local/src/nginx/modules/zstd/lib
+		make
+                export ZSTD_INC=/usr/local/src/nginx/modules/zstd/lib/
+                export ZSTD_LIB=/usr/local/src/nginx/modules/zstd/lib/libzstd.a
+		cd /usr/local/src/nginx/modules
+		git clone https://github.com/tokers/zstd-nginx-module.git
 
 	# Download and extract of Nginx source code
 	cd /usr/local/src/nginx/ || exit 1
@@ -97,7 +105,8 @@ set -e
 		--with-http_sub_module \
 		--add-module=/usr/local/src/nginx/modules/ngx_brotli \
 		--add-module=/usr/local/src/nginx/modules/headers-more-nginx-module-${HEADERMOD_VER} \
-		--add-module=/usr/local/src/nginx/modules/testcookie-nginx-module"
+		--add-module=/usr/local/src/nginx/modules/testcookie-nginx-module \
+		--add-module=/usr/local/src/nginx/modules/zstd-nginx-module"
 
 
 	#### PATCHES #####
