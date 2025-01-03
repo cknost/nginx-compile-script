@@ -123,10 +123,6 @@ set -e
 		#source "$HOME/.cargo/env"
 
 		cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
-		# Patch BoringSSL OCSP stapling
-		wget https://raw.githubusercontent.com/kn007/patch/35f2b0decbc510f2c8adab9261e3d46ba1398e33/Enable_BoringSSL_OCSP.patch -O Enable_BoringSSL_OCSP.patch
-		patch -p01<Enable_BoringSSL_OCSP.patch
-
 
 		#IO uring patch
 		#wget https://raw.githubusercontent.com/hakasenyang/openssl-patch/master/nginx_io_uring.patch -O io_uring.patch
