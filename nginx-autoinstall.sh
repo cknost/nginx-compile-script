@@ -7,27 +7,31 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Define versions
-NGINX_VER=1.25.5
+NGINX_VER=1.29.2
 HEADERMOD_VER=0.37
-BUILDROOT="/usr/local/src/nginx/"
+BUILDROOT="/usr/local/src/nginx"
 set -e
 	# Cleanup
 	# The directory should be deleted at the end of the script, but in case it fails
-	rm -r /usr/local/src/nginx/ >>/dev/null 2>&1
-	mkdir -p /usr/local/src/nginx/modules
+	#rm -r $BUILDROOT >>/dev/null 2>&1
+	mkdir -p $BUILDROOT/modules
 
 	# Dependencies
-	dnf install -y ca-certificates wget curl autoconf unzip automake libtool tar git cmake liburing patch gcc gcc-c++ zstd
+	dnf install -y ca-certificates wget curl autoconf unzip automake libtool tar git cmake liburing patch gcc gcc-c++ zstd golang
+
 	if [ $(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release|grep -oP "[0-9]+"|head -1) == "9" ]; then
 		dnf -y install gcc-toolset-12-gcc gcc-toolset-12-gcc-c++
 		source /opt/rh/gcc-toolset-12/enable
+	elif [ $(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release|grep -oP "[0-9]+"|head -1) == "10" ]; then
+    dnf -y groupinstall 'Development Tools'
+    dnf -y install pcre2-devel
 	else
 		dnf -y install gcc-toolset-11-gcc gcc-toolset-11-gcc-c++
 		source /opt/rh/gcc-toolset-11/enable
 	fi
 
 	# Brotli
-		cd /usr/local/src/nginx/modules || exit 1
+		cd $BUILDROOT/modules || exit 1
 		git clone https://github.com/google/ngx_brotli
 		cd ngx_brotli || exit 1
 		git submodule update --init
@@ -37,20 +41,20 @@ set -e
 		cmake --build . --config Release --target brotlienc
 
 	# More Headers
-		cd /usr/local/src/nginx/modules || exit 1
+		cd $BUILDROOT/modules || exit 1
 		wget https://github.com/openresty/headers-more-nginx-module/archive/v${HEADERMOD_VER}.tar.gz
 		tar xaf v${HEADERMOD_VER}.tar.gz
 
 	# testcookie
-		cd /usr/local/src/nginx/modules || exit 1
+		cd $BUILDROOT/modules || exit 1
 		git clone https://github.com/dvershinin/testcookie-nginx-module.git
 	# zstd
 		git clone https://github.com/facebook/zstd.git
-		cd /usr/local/src/nginx/modules/zstd/lib
+		cd $BUILDROOT/modules/zstd/lib
 		make
-                export ZSTD_INC=/usr/local/src/nginx/modules/zstd/lib/
-                export ZSTD_LIB=/usr/local/src/nginx/modules/zstd/lib/libzstd.a
-		cd /usr/local/src/nginx/modules
+    export ZSTD_INC=/usr/local/src/nginx/modules/zstd/lib/
+    export ZSTD_LIB=/usr/local/src/nginx/modules/zstd/lib/libzstd.a
+		cd $BUILDROOT/modules
 		git clone https://github.com/tokers/zstd-nginx-module.git
 
 	# Download and extract of Nginx source code
@@ -64,9 +68,9 @@ set -e
 	cd $BUILDROOT/modules
 	git clone https://boringssl.googlesource.com/boringssl
 	cd boringssl
-	git checkout --force --quiet e648990
-	grep -qxF 'SET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' crypto/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' >> crypto/CMakeLists.txt
-	grep -qxF 'SET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' ssl/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' >> ssl/CMakeLists.txt
+	git checkout --force --quiet 7cad421
+	#grep -qxF 'SET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' crypto/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' >> crypto/CMakeLists.txt
+	#grep -qxF 'SET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' ssl/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' >> ssl/CMakeLists.txt
 	mkdir build
 	cd $BUILDROOT/modules/boringssl/build
 	cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -75,8 +79,10 @@ set -e
 	mkdir -p .openssl/lib
 	cd .openssl
 	ln -s ../include include
-	cp "$BUILDROOT/modules/boringssl/build/crypto/libcrypto.a" lib/
-	cp "$BUILDROOT/modules/boringssl/build/ssl/libssl.a" lib/
+	#cp "$BUILDROOT/modules/boringssl/build/crypto/libcrypto.a" /usr/lib/
+	#cp "$BUILDROOT/modules/boringssl/build/ssl/libssl.a" /usr/lib/
+  cp "$BUILDROOT/modules/boringssl/build/libcrypto.a" "$BUILDROOT/modules/boringssl/.openssl/lib/libcrypto.a"
+	cp "$BUILDROOT/modules/boringssl/build/libssl.a" "$BUILDROOT/modules/boringssl/.openssl/lib/libssl.a"
 
 	NGINX_OPTIONS="
 		--prefix=/etc/nginx \
@@ -114,8 +120,8 @@ set -e
 	cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
 
 	# Cloudflare's TLS Dynamic Record Resizing patch
-		wget https://raw.githubusercontent.com/nginx-modules/ngx_http_tls_dyn_size/master/nginx__dynamic_tls_records_1.25.1%2B.patch -O tcp-tls.patch
-		patch -p1 <tcp-tls.patch
+		#wget https://raw.githubusercontent.com/nginx-modules/ngx_http_tls_dyn_size/master/nginx__dynamic_tls_records_1.25.1%2B.patch -O tcp-tls.patch
+		#patch -p1 <tcp-tls.patch
 
 	# other
 		# Dependencies for BoringSSL
@@ -130,7 +136,7 @@ set -e
 
 
 
-	./configure $NGINX_OPTIONS $NGINX_MODULES --with-cc-opt="-I/usr/local/src/nginx/modules/boringssl/include" --with-ld-opt="-L/usr/local/src/nginx/modules/boringssl/build/ssl -L/usr/local/src/nginx/modules/boringssl/build/crypto"
+	./configure $NGINX_OPTIONS $NGINX_MODULES --with-cc-opt="-I/usr/local/src/nginx/modules/boringssl/.openssl/include" --with-ld-opt="-lssl -lcrypto -lstdc++ -L/usr/local/src/nginx/modules/boringssl/build/"
 	touch "$BUILDROOT/modules/boringssl/.openssl/include/openssl/ssl.h"
 	make -j "$(nproc)"
 	make install
@@ -140,8 +146,8 @@ set -e
 
 	# Nginx installation from source does not add an init script for systemd and logrotate
 	# Using the official systemd script and logrotate conf from nginx.org
-	if [[ ! -e /lib/systemd/system/nginx.service ]]; then
-		cd /lib/systemd/system/ || exit 1
+	if [[ ! -e /usr/lib/systemd/system/nginx.service ]]; then
+		cd /usr/lib/systemd/system/ || exit 1
 		wget https://raw.githubusercontent.com/Angristan/nginx-autoinstall/master/conf/nginx.service
 		# Enable nginx start at boot
 		systemctl enable nginx

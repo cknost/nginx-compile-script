@@ -1,7 +1,7 @@
 # Nginx compile Script
+ 
 
-Nginx compile script for RHEL and Debian. 
-Tested with Rocky Linux 8 and 9.
+Tested with Rocky Linux 10.
 
 
-With io_uring, hpack push, http3, boringssl, bortli
+With io_uring, hpack push, http3, boringssl, brotli
