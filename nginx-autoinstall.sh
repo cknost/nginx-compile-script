@@ -8,7 +8,7 @@ fi
 
 # Define versions
 NGINX_VER=1.29.2
-HEADERMOD_VER=0.37
+HEADERMOD_VER=0.39
 BUILDROOT="/usr/local/src/nginx"
 set -e
 	# Cleanup
@@ -120,8 +120,8 @@ set -e
 	cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
 
 	# Cloudflare's TLS Dynamic Record Resizing patch
-		#wget https://raw.githubusercontent.com/nginx-modules/ngx_http_tls_dyn_size/master/nginx__dynamic_tls_records_1.25.1%2B.patch -O tcp-tls.patch
-		#patch -p1 <tcp-tls.patch
+		wget https://github.com/nginx-modules/ngx_http_tls_dyn_size/raw/refs/heads/master/nginx__dynamic_tls_records_1.29.2+.patch -O tcp-tls.patch
+		patch -p1 <tcp-tls.patch
 
 	# other
 		# Dependencies for BoringSSL
