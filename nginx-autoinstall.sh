@@ -156,7 +156,7 @@ set -e
 
 	if [[ ! -e /etc/logrotate.d/nginx ]]; then
 		cd /etc/logrotate.d/ || exit 1
-		wget https://raw.githubusercontent.com/Angristan/nginx-autoinstall/master/conf/nginx-logrotate -O nginx
+		wget https://github.com/cknost/nginx-compile-script/raw/refs/heads/main/configs/nginx-logrotate -O nginx
 	fi
 
 	# Nginx's cache directory is not created by default
