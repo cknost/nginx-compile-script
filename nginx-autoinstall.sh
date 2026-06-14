@@ -7,7 +7,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Define versions
-NGINX_VER=1.31.0
+NGINX_VER=1.31.1
 HEADERMOD_VER=0.39
 BUILDROOT="/usr/local/src/nginx"
 set -e
