@@ -7,7 +7,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Define versions
-NGINX_VER=1.31.3
+NGINX_VER=1.31.6
 HEADERMOD_VER=0.39
 BUILDROOT="/usr/local/src/nginx"
 set -e
@@ -68,20 +68,17 @@ set -e
 	cd $BUILDROOT/modules
 	git clone https://boringssl.googlesource.com/boringssl
 	cd boringssl
-	git checkout --force --quiet 7cad421
-	#grep -qxF 'SET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' crypto/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(crypto PROPERTIES SOVERSION 1)' >> crypto/CMakeLists.txt
-	#grep -qxF 'SET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' ssl/CMakeLists.txt || echo -e '\nSET_TARGET_PROPERTIES(ssl PROPERTIES SOVERSION 1)' >> ssl/CMakeLists.txt
+	git checkout --force --quiet '0.20260211.0'
+	#git checkout --force --quiet 7cad421
 	mkdir build
 	cd $BUILDROOT/modules/boringssl/build
-	cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+	cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_STANDARD=17 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DCMAKE_POSITION_INDEPENDENT_CODE=O -DCMAKE_C_FLAGS="-flto -fno-fat-lto-objects -Wno-error=array-bounds -Wno-error=stringop-overread" -DCMAKE_CXX_FLAGS="-flto -fno-fat-lto-objects -Wno-error=array-bounds -Wno-error=stringop-overread" -DCMAKE_EXE_LINKER_FLAGS="-flto -lstdc++ -lgcc_s"
 	make -j8
 	cd $BUILDROOT/modules/boringssl
 	mkdir -p .openssl/lib
 	cd .openssl
 	ln -s ../include include
-	#cp "$BUILDROOT/modules/boringssl/build/crypto/libcrypto.a" /usr/lib/
-	#cp "$BUILDROOT/modules/boringssl/build/ssl/libssl.a" /usr/lib/
-  cp "$BUILDROOT/modules/boringssl/build/libcrypto.a" "$BUILDROOT/modules/boringssl/.openssl/lib/libcrypto.a"
+	cp "$BUILDROOT/modules/boringssl/build/libcrypto.a" "$BUILDROOT/modules/boringssl/.openssl/lib/libcrypto.a"
 	cp "$BUILDROOT/modules/boringssl/build/libssl.a" "$BUILDROOT/modules/boringssl/.openssl/lib/libssl.a"
 
 	NGINX_OPTIONS="
