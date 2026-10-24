@@ -7,8 +7,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Define versions
-NGINX_VER=1.31.6
-HEADERMOD_VER=0.39
+NGINX_VER=1.31.8
+HEADERMOD_VER=0.40
 BUILDROOT="/usr/local/src/nginx"
 set -e
 	# Cleanup
@@ -68,7 +68,7 @@ set -e
 	cd $BUILDROOT/modules
 	git clone https://boringssl.googlesource.com/boringssl
 	cd boringssl
-	git checkout --force --quiet '0.20260211.0'
+	git checkout --force --quiet '0.20261020.0'
 	#git checkout --force --quiet 7cad421
 	mkdir build
 	cd $BUILDROOT/modules/boringssl/build
@@ -92,6 +92,7 @@ set -e
 		--http-client-body-temp-path=/var/cache/nginx/client_temp \
 		--http-proxy-temp-path=/var/cache/nginx/proxy_temp \
 		--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
+		--with-openssl-opt=enable-ktls \
 		--user=nginx \
 		--group=nginx \
 		--with-openssl=$BUILDROOT/modules/boringssl"
